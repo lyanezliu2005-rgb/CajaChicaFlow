@@ -66,13 +66,13 @@ export const authApi = {
   },
 
   // Obtener datos del usuario (tenantId y rol) desde Firestore
-  getUserData: async (uid: string, email: string) => {
-    // Buscar en qué tenant está el usuario
+  getUserData: async (uid: string, _email: string): Promise<{ tenantId: string; role: string; name: string } | null> => {
     const tenantsSnap = await getDocs(collection(db, 'tenants'))
     for (const tenantDoc of tenantsSnap.docs) {
       const userDoc = await getDoc(doc(db, `tenants/${tenantDoc.id}/users`, uid))
       if (userDoc.exists()) {
-        return { tenantId: tenantDoc.id, ...userDoc.data() }
+        const data = userDoc.data()
+        return { tenantId: tenantDoc.id, role: data.role || '', name: data.name || '' }
       }
     }
     return null
