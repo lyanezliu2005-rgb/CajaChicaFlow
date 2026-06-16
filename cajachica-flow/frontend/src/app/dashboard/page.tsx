@@ -111,6 +111,25 @@ export default function DashboardPage() {
             </Link>
           )}
         </div>
+
+        {['admin', 'superadmin'].includes(claims?.role || '') && (
+          <div className="mt-6">
+            <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">Administración</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <Link href="/admin/usuarios" className="card hover:shadow-md transition-shadow cursor-pointer group">
+                <div className="text-3xl mb-2">👥</div>
+                <h3 className="font-semibold text-gray-900 group-hover:text-blue-600">Usuarios</h3>
+                <p className="text-sm text-gray-500 mt-1">Gestionar usuarios y permisos</p>
+              </Link>
+
+              <Link href="/admin/erp" className="card hover:shadow-md transition-shadow cursor-pointer group">
+                <div className="text-3xl mb-2">🔗</div>
+                <h3 className="font-semibold text-gray-900 group-hover:text-blue-600">Integración ERP</h3>
+                <p className="text-sm text-gray-500 mt-1">Exportar gastos aprobados al ERP</p>
+              </Link>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )

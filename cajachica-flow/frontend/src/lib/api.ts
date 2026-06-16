@@ -66,13 +66,26 @@ export const authApi = {
   },
 
   // Obtener datos del usuario (tenantId y rol) desde Firestore
-  getUserData: async (uid: string, _email: string): Promise<{ tenantId: string; role: string; name: string } | null> => {
+  getUserData: async (uid: string, email: string): Promise<{ tenantId: string; role: string; name: string } | null> => {
     const tenantsSnap = await getDocs(collection(db, 'tenants'))
     for (const tenantDoc of tenantsSnap.docs) {
+      // First try by UID
       const userDoc = await getDoc(doc(db, `tenants/${tenantDoc.id}/users`, uid))
       if (userDoc.exists()) {
         const data = userDoc.data()
         return { tenantId: tenantDoc.id, role: data.role || '', name: data.name || '' }
+      }
+      // Fallback: try by email (pre-registered users)
+      if (email) {
+        const emailSnap = await getDocs(
+          query(collection(db, `tenants/${tenantDoc.id}/users`), where('email', '==', email))
+        )
+        if (!emailSnap.empty) {
+          const data = emailSnap.docs[0].data()
+          // Update doc with UID so future lookups work
+          await updateDoc(emailSnap.docs[0].ref, { uid, preRegistered: false })
+          return { tenantId: tenantDoc.id, role: data.role || 'employee', name: data.name || '' }
+        }
       }
     }
     return null
@@ -200,5 +213,58 @@ export const reportsApi = {
       totalAmount: expenses.reduce((s, e) => s + (e.amount || 0), 0),
       approvedAmount: expenses.filter(e => e.status === 'approved').reduce((s, e) => s + (e.amount || 0), 0),
     }
+  },
+}
+
+// ── Users Admin ───────────────────────────────────────────────
+export const usersApi = {
+  list: async (tenantId: string) => {
+    const snap = await getDocs(collection(db, `tenants/${tenantId}/users`))
+    return snap.docs.map(d => ({ id: d.id, ...d.data() }))
+  },
+
+  upsert: async (tenantId: string, data: { email: string; name: string; role: string }) => {
+    // Pre-register user by email so when they sign up, they get the right role
+    const snap = await getDocs(
+      query(collection(db, `tenants/${tenantId}/users`), where('email', '==', data.email))
+    )
+    if (!snap.empty) {
+      await updateDoc(snap.docs[0].ref, { role: data.role, name: data.name, updatedAt: serverTimestamp() })
+      return snap.docs[0].id
+    }
+    const ref = await addDoc(collection(db, `tenants/${tenantId}/users`), {
+      email: data.email,
+      name: data.name,
+      role: data.role,
+      isActive: true,
+      preRegistered: true,
+      createdAt: serverTimestamp(),
+    })
+    return ref.id
+  },
+
+  updateRole: async (tenantId: string, userId: string, role: string) => {
+    await updateDoc(doc(db, `tenants/${tenantId}/users`, userId), { role, updatedAt: serverTimestamp() })
+  },
+}
+
+// ── ERP Integration ───────────────────────────────────────────
+export const erpApi = {
+  getApproved: async (tenantId: string) => {
+    const q = query(
+      collection(db, `tenants/${tenantId}/expenses`),
+      where('status', '==', 'approved'),
+      orderBy('updatedAt', 'desc'),
+      limit(50)
+    )
+    const snap = await getDocs(q)
+    return snap.docs.map(d => ({ id: d.id, ...d.data() }))
+  },
+
+  markSentToERP: async (tenantId: string, expenseId: string) => {
+    await updateDoc(doc(db, `tenants/${tenantId}/expenses`, expenseId), {
+      erpSent: true,
+      erpSentAt: serverTimestamp(),
+    })
   },
 }
