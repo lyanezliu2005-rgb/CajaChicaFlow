@@ -1,3 +1,4 @@
+'use client'
 import { create } from 'zustand'
 import {
   signInWithEmailAndPassword,
@@ -8,9 +9,15 @@ import {
 import { auth } from '../lib/firebase'
 import { authApi } from '../lib/api'
 
+interface UserClaims {
+  tenantId?: string
+  role?: string
+  name?: string
+}
+
 interface AuthState {
   user: User | null
-  claims: { tenantId?: string; role?: string } | null
+  claims: UserClaims | null
   loading: boolean
   login: (email: string, password: string) => Promise<void>
   logout: () => Promise<void>
@@ -23,17 +30,15 @@ export const useAuthStore = create<AuthState>((set) => ({
   loading: true,
 
   login: async (email, password) => {
-    await signInWithEmailAndPassword(auth, email, password)
-    // Sincronizar claims con el backend
-    await authApi.setClaims()
-    // Forzar refresh del token para obtener claims actualizados
-    await auth.currentUser?.getIdToken(true)
-    const idTokenResult = await auth.currentUser?.getIdTokenResult()
+    const cred = await signInWithEmailAndPassword(auth, email, password)
+    // Obtener rol y tenantId desde Firestore (sin Cloud Functions)
+    const userData = await authApi.getUserData(cred.user.uid, email)
     set({
-      user: auth.currentUser,
+      user: cred.user,
       claims: {
-        tenantId: idTokenResult?.claims.tenantId as string,
-        role: idTokenResult?.claims.role as string,
+        tenantId: userData?.tenantId,
+        role: userData?.role,
+        name: userData?.name,
       },
     })
   },
@@ -46,12 +51,13 @@ export const useAuthStore = create<AuthState>((set) => ({
   init: () => {
     onAuthStateChanged(auth, async (user) => {
       if (user) {
-        const idTokenResult = await user.getIdTokenResult()
+        const userData = await authApi.getUserData(user.uid, user.email || '')
         set({
           user,
           claims: {
-            tenantId: idTokenResult.claims.tenantId as string,
-            role: idTokenResult.claims.role as string,
+            tenantId: userData?.tenantId,
+            role: userData?.role,
+            name: userData?.name,
           },
           loading: false,
         })

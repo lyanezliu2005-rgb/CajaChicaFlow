@@ -29,23 +29,27 @@ export default function ExpenseDetailPage() {
   }, [user, loading, router])
 
   useEffect(() => {
-    if (user && params.id) {
-      expensesApi.get(params.id as string)
+    if (user && claims?.tenantId && params.id) {
+      expensesApi.get(claims.tenantId, params.id as string)
         .then(setExpense)
         .catch(() => router.replace('/expenses'))
     }
-  }, [user, params.id])
+  }, [user, claims, params.id])
 
   const handleApprove = async () => {
+    if (!claims?.tenantId) return
     setProcessing(true)
     try {
-      await expensesApi.approve(params.id as string, { action, comment })
-      const updated: any = await expensesApi.get(params.id as string)
+      await expensesApi.approve(claims.tenantId, params.id as string, { action, comment }, {
+        uid: user!.uid,
+        name: claims.name || user!.email,
+      })
+      const updated = await expensesApi.get(claims.tenantId, params.id as string)
       setExpense(updated)
       setApproveModal(false)
       setComment('')
     } catch (err: any) {
-      alert(err.error || 'Error al procesar')
+      alert(err.message || 'Error al procesar')
     } finally {
       setProcessing(false)
     }
@@ -55,8 +59,7 @@ export default function ExpenseDetailPage() {
     new Intl.NumberFormat('es-CL', { style: 'currency', currency }).format(n)
 
   const formatDate = (ts: any) => ts?.seconds
-    ? new Date(ts.seconds * 1000).toLocaleString('es-CL')
-    : '—'
+    ? new Date(ts.seconds * 1000).toLocaleString('es-CL') : '—'
 
   const isApprover = ['admin', 'approver', 'finance', 'superadmin'].includes(claims?.role || '')
   const canApprove = isApprover && ['pending', 'in_review'].includes(expense?.status)
@@ -84,7 +87,6 @@ export default function ExpenseDetailPage() {
       </header>
 
       <div className="max-w-3xl mx-auto px-4 py-6 space-y-4">
-        {/* Header del gasto */}
         <div className="card">
           <div className="flex items-start justify-between">
             <div>
@@ -106,7 +108,6 @@ export default function ExpenseDetailPage() {
           </div>
         </div>
 
-        {/* Viaje */}
         {expense.expenseType === 'travel' && (expense.travelOrigin || expense.travelDestination) && (
           <div className="card">
             <h2 className="font-semibold text-gray-900 mb-3">✈️ Datos del viaje</h2>
@@ -119,7 +120,6 @@ export default function ExpenseDetailPage() {
           </div>
         )}
 
-        {/* Pasos de aprobación */}
         {expense.approvalSteps?.length > 0 && (
           <div className="card">
             <h2 className="font-semibold text-gray-900 mb-3">Flujo de aprobación</h2>
@@ -129,7 +129,7 @@ export default function ExpenseDetailPage() {
                   <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm shrink-0
                     ${step.action === 'approved' ? 'bg-green-100 text-green-600' :
                       step.action === 'rejected' ? 'bg-red-100 text-red-600' :
-                      step.action === 'pending' ? 'bg-yellow-100 text-yellow-600' : 'bg-gray-100 text-gray-600'}`}>
+                      'bg-yellow-100 text-yellow-600'}`}>
                     {step.action === 'approved' ? '✓' : step.action === 'rejected' ? '✗' : '⏳'}
                   </div>
                   <div className="flex-1">
@@ -144,7 +144,6 @@ export default function ExpenseDetailPage() {
         )}
       </div>
 
-      {/* Modal aprobación */}
       {approveModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-2xl w-full max-w-md p-6">
@@ -152,7 +151,6 @@ export default function ExpenseDetailPage() {
             <p className="text-sm text-gray-600 mb-4">
               <strong>{expense.title}</strong> — {formatCLP(expense.amount, expense.currency)}
             </p>
-
             <div className="space-y-2 mb-4">
               {[
                 { value: 'approved', label: '✅ Aprobar', cls: 'border-green-500 bg-green-50' },
@@ -169,14 +167,11 @@ export default function ExpenseDetailPage() {
                 </label>
               ))}
             </div>
-
             <div className="mb-4">
               <label className="label">Comentario {action !== 'approved' ? '*' : '(opcional)'}</label>
               <textarea value={comment} onChange={e => setComment(e.target.value)}
-                className="input resize-none" rows={3}
-                placeholder="Agrega un comentario..." />
+                className="input resize-none" rows={3} placeholder="Agrega un comentario..." />
             </div>
-
             <div className="flex gap-3">
               <button onClick={() => setApproveModal(false)} className="btn-secondary flex-1">Cancelar</button>
               <button onClick={handleApprove} disabled={processing || (action !== 'approved' && !comment)}

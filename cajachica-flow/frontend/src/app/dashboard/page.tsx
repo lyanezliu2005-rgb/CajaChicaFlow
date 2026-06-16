@@ -8,12 +8,6 @@ import Link from 'next/link'
 interface Summary {
   total: number; pending: number; approved: number; rejected: number
   totalAmount: number; approvedAmount: number
-  byType: Record<string, number>
-}
-
-const statusLabels: Record<string, string> = {
-  pending: '⏳ Pendiente', approved: '✅ Aprobado',
-  rejected: '❌ Rechazado', in_review: '🔍 En revisión', draft: '📝 Borrador'
 }
 
 export default function DashboardPage() {
@@ -28,10 +22,10 @@ export default function DashboardPage() {
   }, [user, loading, router])
 
   useEffect(() => {
-    if (user) {
-      reportsApi.summary().then(setSummary).catch(console.error)
+    if (user && claims?.tenantId) {
+      reportsApi.summary(claims.tenantId).then(setSummary).catch(console.error)
     }
-  }, [user])
+  }, [user, claims])
 
   const formatCLP = (n: number) =>
     new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP' }).format(n)
@@ -44,7 +38,6 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Header */}
       <header className="bg-white border-b border-gray-200 sticky top-0 z-10">
         <div className="max-w-6xl mx-auto px-4 h-14 flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -63,21 +56,19 @@ export default function DashboardPage() {
       </header>
 
       <div className="max-w-6xl mx-auto px-4 py-6">
-        {/* Bienvenida */}
         <div className="mb-6">
           <h1 className="text-xl font-bold text-gray-900">Panel de Control</h1>
           <p className="text-gray-500 text-sm">Resumen de gastos y solicitudes</p>
         </div>
 
-        {/* KPIs */}
         {summary && (
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
             {[
-              { label: 'Total solicitudes', value: summary.total, color: 'blue' },
-              { label: 'Pendientes', value: summary.pending, color: 'yellow' },
-              { label: 'Aprobadas', value: summary.approved, color: 'green' },
-              { label: 'Rechazadas', value: summary.rejected, color: 'red' },
-            ].map(({ label, value, color }) => (
+              { label: 'Total solicitudes', value: summary.total },
+              { label: 'Pendientes', value: summary.pending },
+              { label: 'Aprobadas', value: summary.approved },
+              { label: 'Rechazadas', value: summary.rejected },
+            ].map(({ label, value }) => (
               <div key={label} className="card text-center">
                 <p className="text-2xl font-bold text-gray-900">{value}</p>
                 <p className="text-xs text-gray-500 mt-1">{label}</p>
@@ -86,7 +77,6 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {/* Montos */}
         {summary && (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
             <div className="card">
@@ -100,7 +90,6 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {/* Acciones rápidas */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <Link href="/expenses/nueva" className="card hover:shadow-md transition-shadow cursor-pointer group">
             <div className="text-3xl mb-2">➕</div>
@@ -119,14 +108,6 @@ export default function DashboardPage() {
               <div className="text-3xl mb-2">🔔</div>
               <h3 className="font-semibold text-gray-900 group-hover:text-blue-600">Pendientes de Aprobación</h3>
               <p className="text-sm text-gray-500 mt-1">{summary?.pending || 0} solicitudes esperando</p>
-            </Link>
-          )}
-
-          {['admin', 'superadmin'].includes(claims?.role || '') && (
-            <Link href="/admin" className="card hover:shadow-md transition-shadow cursor-pointer group">
-              <div className="text-3xl mb-2">⚙️</div>
-              <h3 className="font-semibold text-gray-900 group-hover:text-blue-600">Administración</h3>
-              <p className="text-sm text-gray-500 mt-1">Usuarios, workflows y configuración</p>
             </Link>
           )}
         </div>

@@ -33,7 +33,12 @@ export default function RegisterPage() {
       })
       router.replace('/auth/login?registered=1')
     } catch (err: any) {
-      setError(err.error || 'Error al registrar. Intenta de nuevo.')
+      const msg = err.message || ''
+      if (msg.includes('email-already-in-use')) {
+        setError('Este email ya está registrado.')
+      } else {
+        setError('Error al registrar. Intenta de nuevo.')
+      }
     } finally {
       setLoading(false)
     }

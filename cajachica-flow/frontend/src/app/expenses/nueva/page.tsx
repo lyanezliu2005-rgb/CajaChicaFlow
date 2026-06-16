@@ -2,18 +2,20 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useForm } from 'react-hook-form'
+import { useAuthStore } from '../../../store/auth.store'
 import { expensesApi } from '../../../lib/api'
 import Link from 'next/link'
 
 interface ExpenseForm {
   expenseType: string; title: string; description: string
-  amount: number; currency: string; costCenterId: string
+  amount: number; currency: string
   travelOrigin: string; travelDestination: string
   travelStart: string; travelEnd: string
 }
 
 export default function NuevaExpensePage() {
   const router = useRouter()
+  const { user, claims } = useAuthStore()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
@@ -24,16 +26,18 @@ export default function NuevaExpensePage() {
   const expenseType = watch('expenseType')
 
   const onSubmit = async (data: ExpenseForm) => {
+    if (!claims?.tenantId || !user) return
     setLoading(true)
     setError('')
     try {
-      const result: any = await expensesApi.create({
-        ...data,
-        amount: Number(data.amount),
+      const result: any = await expensesApi.create(data, claims.tenantId, {
+        uid: user.uid,
+        email: user.email,
+        name: claims.name || user.email,
       })
       router.replace(`/expenses/${result.id}`)
     } catch (err: any) {
-      setError(err.error || 'Error al crear la solicitud')
+      setError(err.message || 'Error al crear la solicitud')
     } finally {
       setLoading(false)
     }
@@ -50,7 +54,6 @@ export default function NuevaExpensePage() {
 
       <div className="max-w-2xl mx-auto px-4 py-6">
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-          {/* Tipo de gasto */}
           <div className="card">
             <h2 className="font-semibold text-gray-900 mb-4">Tipo de solicitud</h2>
             <div className="grid grid-cols-2 gap-3">
@@ -71,24 +74,20 @@ export default function NuevaExpensePage() {
             </div>
           </div>
 
-          {/* Datos del gasto */}
           <div className="card space-y-4">
             <h2 className="font-semibold text-gray-900">Detalle del gasto</h2>
-
             <div>
               <label className="label">Título *</label>
               <input {...register('title', { required: 'Requerido', minLength: { value: 3, message: 'Mínimo 3 caracteres' } })}
-                className="input" placeholder="Ej: Materiales de oficina para reunión cliente" />
+                className="input" placeholder="Ej: Materiales de oficina" />
               {errors.title && <p className="text-red-500 text-xs mt-1">{errors.title.message}</p>}
             </div>
-
             <div>
               <label className="label">Descripción / Justificación</label>
               <textarea {...register('description')}
                 className="input resize-none" rows={3}
                 placeholder="Detalla el motivo del gasto..." />
             </div>
-
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="label">Monto *</label>
@@ -107,7 +106,6 @@ export default function NuevaExpensePage() {
             </div>
           </div>
 
-          {/* Datos de viaje (solo si es travel) */}
           {expenseType === 'travel' && (
             <div className="card space-y-4">
               <h2 className="font-semibold text-gray-900">Datos del viaje</h2>
