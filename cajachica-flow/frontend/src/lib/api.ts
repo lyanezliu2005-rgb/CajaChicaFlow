@@ -7,6 +7,51 @@ import { db, auth } from './firebase'
 
 // ── Auth ──────────────────────────────────────────────────────
 export const authApi = {
+  generateInviteToken: async (tenantId: string, userId: string): Promise<string> => {
+    const token = crypto.randomUUID()
+    await updateDoc(doc(db, `tenants/${tenantId}/users`, userId), {
+      inviteToken: token,
+      inviteTokenCreatedAt: serverTimestamp(),
+    })
+    return token
+  },
+
+  getUserByInviteToken: async (token: string): Promise<{ name: string; email: string } | null> => {
+    const tenantsSnap = await getDocs(collection(db, 'tenants'))
+    for (const tenantDoc of tenantsSnap.docs) {
+      const snap = await getDocs(
+        query(collection(db, `tenants/${tenantDoc.id}/users`), where('inviteToken', '==', token))
+      )
+      if (!snap.empty) {
+        const data = snap.docs[0].data()
+        if (!data.preRegistered) return null
+        return { name: data.name, email: data.email }
+      }
+    }
+    return null
+  },
+
+  activateAccount: async (token: string, email: string, password: string): Promise<void> => {
+    const tenantsSnap = await getDocs(collection(db, 'tenants'))
+    for (const tenantDoc of tenantsSnap.docs) {
+      const snap = await getDocs(
+        query(collection(db, `tenants/${tenantDoc.id}/users`), where('inviteToken', '==', token))
+      )
+      if (!snap.empty) {
+        const cred = await createUserWithEmailAndPassword(auth, email, password)
+        await updateDoc(snap.docs[0].ref, {
+          uid: cred.user.uid,
+          preRegistered: false,
+          inviteToken: null,
+          isActive: true,
+          updatedAt: serverTimestamp(),
+        })
+        return
+      }
+    }
+    throw new Error('Token inválido')
+  },
+
   registerTenant: async (data: {
     companyName: string
     adminName: string
@@ -14,11 +59,9 @@ export const authApi = {
     adminPassword: string
     plan: string
   }) => {
-    // 1. Crear usuario en Firebase Auth
     const cred = await createUserWithEmailAndPassword(auth, data.adminEmail, data.adminPassword)
     const uid = cred.user.uid
 
-    // 2. Crear tenant en Firestore
     const tenantRef = doc(collection(db, 'tenants'))
     const tenantId = tenantRef.id
 
@@ -34,7 +77,6 @@ export const authApi = {
       },
     })
 
-    // 3. Crear usuario dentro del tenant
     await setDoc(doc(db, `tenants/${tenantId}/users`, uid), {
       name: data.adminName,
       email: data.adminEmail,
@@ -44,7 +86,6 @@ export const authApi = {
       createdAt: serverTimestamp(),
     })
 
-    // 4. Crear workflow por defecto
     await addDoc(collection(db, `tenants/${tenantId}/workflows`), {
       name: 'Flujo Estándar',
       isActive: true,
@@ -56,7 +97,6 @@ export const authApi = {
       createdAt: serverTimestamp(),
     })
 
-    // 5. Centro de costo por defecto
     await addDoc(collection(db, `tenants/${tenantId}/costCenters`), {
       code: 'CC-001', name: 'General', isActive: true,
       createdAt: serverTimestamp(),
@@ -65,24 +105,20 @@ export const authApi = {
     return { tenantId, userId: uid }
   },
 
-  // Obtener datos del usuario (tenantId y rol) desde Firestore
   getUserData: async (uid: string, email: string): Promise<{ tenantId: string; role: string; name: string } | null> => {
     const tenantsSnap = await getDocs(collection(db, 'tenants'))
     for (const tenantDoc of tenantsSnap.docs) {
-      // First try by UID
       const userDoc = await getDoc(doc(db, `tenants/${tenantDoc.id}/users`, uid))
       if (userDoc.exists()) {
         const data = userDoc.data()
         return { tenantId: tenantDoc.id, role: data.role || '', name: data.name || '' }
       }
-      // Fallback: try by email (pre-registered users)
       if (email) {
         const emailSnap = await getDocs(
           query(collection(db, `tenants/${tenantDoc.id}/users`), where('email', '==', email))
         )
         if (!emailSnap.empty) {
           const data = emailSnap.docs[0].data()
-          // Update doc with UID so future lookups work
           await updateDoc(emailSnap.docs[0].ref, { uid, preRegistered: false })
           return { tenantId: tenantDoc.id, role: data.role || 'employee', name: data.name || '' }
         }
@@ -173,7 +209,6 @@ export const expensesApi = {
     const expenseDoc = await getDoc(expenseRef)
     const expense = expenseDoc.data()!
 
-    // Registrar el paso de aprobación
     await addDoc(collection(db, `tenants/${tenantId}/expenses/${expenseId}/approvalSteps`), {
       stageOrder: expense.currentStage,
       stageName: data.action === 'approved' ? 'Aprobado' : data.action === 'rejected' ? 'Rechazado' : 'Devuelto',
@@ -224,7 +259,6 @@ export const usersApi = {
   },
 
   upsert: async (tenantId: string, data: { email: string; name: string; role: string }) => {
-    // Pre-register user by email so when they sign up, they get the right role
     const snap = await getDocs(
       query(collection(db, `tenants/${tenantId}/users`), where('email', '==', data.email))
     )

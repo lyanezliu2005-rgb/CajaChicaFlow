@@ -35,7 +35,7 @@ export default function RegisterPage() {
     } catch (err: any) {
       const msg = err.message || ''
       if (msg.includes('email-already-in-use')) {
-        setError('Este email ya está registrado.')
+        setError('Este email ya está registrado. Intenta iniciar sesión.')
       } else {
         setError('Error al registrar. Intenta de nuevo.')
       }
@@ -60,24 +60,28 @@ export default function RegisterPage() {
               className="input" placeholder="Mi Empresa S.A." />
             {errors.companyName && <p className="text-red-500 text-xs mt-1">{errors.companyName.message}</p>}
           </div>
+
           <div>
-            <label className="label">Tu nombre</label>
+            <label className="label">Tu nombre (administrador)</label>
             <input {...register('adminName', { required: 'Requerido' })}
               className="input" placeholder="Juan Pérez" />
             {errors.adminName && <p className="text-red-500 text-xs mt-1">{errors.adminName.message}</p>}
           </div>
+
           <div>
             <label className="label">Email</label>
             <input {...register('adminEmail', { required: 'Requerido' })}
               type="email" className="input" placeholder="juan@empresa.com" />
             {errors.adminEmail && <p className="text-red-500 text-xs mt-1">{errors.adminEmail.message}</p>}
           </div>
+
           <div>
             <label className="label">Contraseña</label>
             <input {...register('adminPassword', { required: 'Requerido', minLength: { value: 8, message: 'Mínimo 8 caracteres' } })}
               type="password" className="input" placeholder="••••••••" />
             {errors.adminPassword && <p className="text-red-500 text-xs mt-1">{errors.adminPassword.message}</p>}
           </div>
+
           <div>
             <label className="label">Confirmar contraseña</label>
             <input {...register('confirmPassword', {
@@ -96,10 +100,16 @@ export default function RegisterPage() {
           </button>
         </form>
 
-        <p className="mt-4 text-center text-sm text-gray-500">
-          ¿Ya tienes cuenta?{' '}
-          <Link href="/auth/login" className="text-blue-600 hover:underline font-medium">Ingresar</Link>
-        </p>
+        <div className="mt-6 space-y-2 text-center text-sm text-gray-500">
+          <p>
+            ¿Ya tienes cuenta?{' '}
+            <Link href="/auth/login" className="text-blue-600 hover:underline font-medium">Ingresar</Link>
+          </p>
+          <p>
+            ¿Te invitaron a una empresa?{' '}
+            <Link href="/auth/activar" className="text-blue-600 hover:underline font-medium">Activa tu cuenta aquí</Link>
+          </p>
+        </div>
       </div>
     </div>
   )

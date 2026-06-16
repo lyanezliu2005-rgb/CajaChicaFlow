@@ -35,7 +35,7 @@ export default function NuevaExpensePage() {
         email: user.email,
         name: claims.name || user.email,
       })
-      router.replace(`/expenses/${result.id}`)
+      router.replace(`/expenses/detalle?id=${result.id}`)
     } catch (err: any) {
       setError(err.message || 'Error al crear la solicitud')
     } finally {

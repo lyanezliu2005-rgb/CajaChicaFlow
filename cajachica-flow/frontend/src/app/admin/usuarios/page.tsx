@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useAuthStore } from '../../../store/auth.store'
-import { usersApi } from '../../../lib/api'
+import { usersApi, authApi } from '../../../lib/api'
 
 const ROLE_LABELS: Record<string, string> = {
   employee: 'Solicitante',
@@ -35,6 +35,7 @@ export default function UsuariosPage() {
   const [form, setForm] = useState({ email: '', name: '', role: 'employee' })
   const [formError, setFormError] = useState('')
   const [successMsg, setSuccessMsg] = useState('')
+  const [generatingLink, setGeneratingLink] = useState<string | null>(null)
 
   useEffect(() => { init() }, [init])
 
@@ -63,6 +64,22 @@ export default function UsuariosPage() {
       console.error(e)
     } finally {
       setLoadingUsers(false)
+    }
+  }
+
+  const handleCopyInviteLink = async (userId: string) => {
+    setGeneratingLink(userId)
+    try {
+      const token = await authApi.generateInviteToken(claims!.tenantId, userId)
+      const link = `${window.location.origin}/auth/activar?token=${token}`
+      await navigator.clipboard.writeText(link)
+      setSuccessMsg('Link de invitación copiado al portapapeles. Compártelo con el usuario.')
+      setTimeout(() => setSuccessMsg(''), 5000)
+      await loadUsers()
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setGeneratingLink(null)
     }
   }
 
@@ -115,10 +132,7 @@ export default function UsuariosPage() {
             <span className="text-gray-300">|</span>
             <span className="font-bold text-gray-900">👥 Gestión de Usuarios</span>
           </div>
-          <button
-            onClick={() => setShowModal(true)}
-            className="btn-primary text-sm"
-          >
+          <button onClick={() => setShowModal(true)} className="btn-primary text-sm">
             + Agregar usuario
           </button>
         </div>
@@ -145,6 +159,7 @@ export default function UsuariosPage() {
                     <th className="text-left px-4 py-3 font-medium text-gray-700">Email</th>
                     <th className="text-left px-4 py-3 font-medium text-gray-700">Rol</th>
                     <th className="text-left px-4 py-3 font-medium text-gray-700">Estado</th>
+                    <th className="text-left px-4 py-3 font-medium text-gray-700">Invitación</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
@@ -169,12 +184,25 @@ export default function UsuariosPage() {
                       <td className="px-4 py-3">
                         {u.preRegistered ? (
                           <span className="text-xs bg-yellow-100 text-yellow-700 px-2 py-1 rounded-full font-medium">
-                            Pre-registrado
+                            Pendiente
                           </span>
                         ) : (
                           <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full font-medium">
                             Activo
                           </span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3">
+                        {u.preRegistered ? (
+                          <button
+                            onClick={() => handleCopyInviteLink(u.id)}
+                            disabled={generatingLink === u.id}
+                            className="text-xs bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded-lg font-medium disabled:opacity-50"
+                          >
+                            {generatingLink === u.id ? 'Generando...' : '🔗 Copiar link'}
+                          </button>
+                        ) : (
+                          <span className="text-xs text-gray-400">—</span>
                         )}
                       </td>
                     </tr>
@@ -186,7 +214,6 @@ export default function UsuariosPage() {
         </div>
       </div>
 
-      {/* Modal agregar usuario */}
       {showModal && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-md">
@@ -203,49 +230,25 @@ export default function UsuariosPage() {
               )}
               <div>
                 <label className="label">Email</label>
-                <input
-                  type="email"
-                  className="input"
-                  placeholder="usuario@empresa.com"
-                  value={form.email}
-                  onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
-                  required
-                />
+                <input type="email" className="input" placeholder="usuario@empresa.com"
+                  value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} required />
               </div>
               <div>
                 <label className="label">Nombre completo</label>
-                <input
-                  type="text"
-                  className="input"
-                  placeholder="Juan Pérez"
-                  value={form.name}
-                  onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-                  required
-                />
+                <input type="text" className="input" placeholder="Juan Pérez"
+                  value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} required />
               </div>
               <div>
                 <label className="label">Rol</label>
-                <select
-                  className="input"
-                  value={form.role}
-                  onChange={e => setForm(f => ({ ...f, role: e.target.value }))}
-                >
+                <select className="input" value={form.role} onChange={e => setForm(f => ({ ...f, role: e.target.value }))}>
                   {ROLE_OPTIONS.map(r => (
                     <option key={r} value={r}>{ROLE_LABELS[r]}</option>
                   ))}
                 </select>
               </div>
               <div className="flex gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={() => { setShowModal(false); setFormError('') }}
-                  className="btn-secondary flex-1"
-                >
-                  Cancelar
-                </button>
-                <button type="submit" disabled={saving} className="btn-primary flex-1">
-                  {saving ? 'Guardando...' : 'Agregar'}
-                </button>
+                <button type="button" onClick={() => { setShowModal(false); setFormError('') }} className="btn-secondary flex-1">Cancelar</button>
+                <button type="submit" disabled={saving} className="btn-primary flex-1">{saving ? 'Guardando...' : 'Agregar'}</button>
               </div>
             </form>
           </div>

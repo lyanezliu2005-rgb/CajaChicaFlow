@@ -84,7 +84,7 @@ export default function ExpensesPage() {
         ) : (
           <div className="space-y-3">
             {expenses.map((expense: any) => (
-              <Link key={expense.id} href={`/expenses/${expense.id}`}
+              <Link key={expense.id} href={`/expenses/detalle?id=${expense.id}`}
                 className="card hover:shadow-md transition-shadow block">
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex-1 min-w-0">
