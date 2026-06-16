@@ -1,0 +1,98 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── Helpers ──────────────────────────────────────────────
+    function isAuth() {
+      return request.auth != null;
+    }
+    function isTenantMember(tenantId) {
+      return isAuth() && request.auth.token.tenantId == tenantId;
+    }
+    function isTenantAdmin(tenantId) {
+      return isTenantMember(tenantId) && request.auth.token.role in ['admin', 'superadmin'];
+    }
+    function isApprover(tenantId) {
+      return isTenantMember(tenantId) && request.auth.token.role in ['admin', 'approver', 'superadmin'];
+    }
+    function isSuperAdmin() {
+      return isAuth() && request.auth.token.role == 'superadmin';
+    }
+
+    // ── Tenants (solo superadmin puede crear/editar) ──────────
+    match /tenants/{tenantId} {
+      allow read: if isTenantMember(tenantId) || isSuperAdmin();
+      allow write: if isSuperAdmin();
+
+      // ── Usuarios del tenant ────────────────────────────────
+      match /users/{userId} {
+        allow read: if isTenantMember(tenantId);
+        allow write: if isTenantAdmin(tenantId);
+        allow update: if isAuth() && request.auth.uid == userId;
+      }
+
+      // ── Gastos / Caja Chica ────────────────────────────────
+      match /expenses/{expenseId} {
+        allow read: if isTenantMember(tenantId);
+        allow create: if isTenantMember(tenantId);
+        allow update: if isTenantMember(tenantId) &&
+          (request.auth.uid == resource.data.requesterId || isApprover(tenantId));
+        allow delete: if isTenantAdmin(tenantId);
+
+        // Items de gasto
+        match /items/{itemId} {
+          allow read, write: if isTenantMember(tenantId);
+        }
+
+        // Adjuntos
+        match /attachments/{attachmentId} {
+          allow read: if isTenantMember(tenantId);
+          allow create: if isTenantMember(tenantId);
+          allow delete: if isTenantAdmin(tenantId);
+        }
+
+        // Pasos de aprobación
+        match /approvalSteps/{stepId} {
+          allow read: if isTenantMember(tenantId);
+          allow write: if isApprover(tenantId);
+        }
+      }
+
+      // ── Workflows ──────────────────────────────────────────
+      match /workflows/{workflowId} {
+        allow read: if isTenantMember(tenantId);
+        allow write: if isTenantAdmin(tenantId);
+      }
+
+      // ── Centros de costo ───────────────────────────────────
+      match /costCenters/{costCenterId} {
+        allow read: if isTenantMember(tenantId);
+        allow write: if isTenantAdmin(tenantId);
+      }
+
+      // ── Departamentos ──────────────────────────────────────
+      match /departments/{deptId} {
+        allow read: if isTenantMember(tenantId);
+        allow write: if isTenantAdmin(tenantId);
+      }
+
+      // ── Auditoría (solo lectura para admins) ───────────────
+      match /auditLogs/{logId} {
+        allow read: if isTenantAdmin(tenantId);
+        allow create: if isTenantMember(tenantId);
+        allow update, delete: if false;
+      }
+
+      // ── Notificaciones ─────────────────────────────────────
+      match /notifications/{notifId} {
+        allow read: if isAuth() && request.auth.uid == resource.data.userId;
+        allow write: if false; // Solo Cloud Functions escriben
+      }
+    }
+
+    // ── Super Admins (panel global) ───────────────────────────
+    match /superAdmins/{adminId} {
+      allow read, write: if isSuperAdmin();
+    }
+  }
+}
